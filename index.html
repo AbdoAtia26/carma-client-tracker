@@ -223,8 +223,8 @@ const spGet = async () => {
   return rows.map(r => ({
     id:          r.rowIndex,
     spId:        r.rowIndex,
-    account:     r.account     || "",
-    am:          r.account_manager || "",
+    account:     r.account || r.Account || r.Title || r.title || "",
+    am:          r.account_manager || r.AccountManager || "",
     renewal:     r.renewal     || "",
     service:     r.service     || "",
     contract:    r.contract    || "",
@@ -265,7 +265,7 @@ const spDelete = async (rowIndex) => {
 
 
 // ── Login ────────────────────────────────────────────────────
-function Login({ onLogin }) {
+function Login({ onLogin, ams }) {
   const [role, setRole]   = useState("am");
   const [name, setName]   = useState("");
   const [pass, setPass]   = useState("");
@@ -277,8 +277,14 @@ function Login({ onLogin }) {
       if (pass !== ANALYST_PASS) { setErr("Incorrect password."); return; }
       onLogin({ role:"analyst", name:"Revenue Analyst" });
     } else {
-      if (!name.trim()) { setErr("Enter your name."); return; }
-      onLogin({ role:"am", name: name.trim() });
+      if (!name.trim()) { setErr("Please enter your name."); return; }
+      // Validate against AM list (case-insensitive)
+      const match = ams.find(a => a.toLowerCase().trim() === name.toLowerCase().trim());
+      if (ams.length > 0 && !match) {
+        setErr("Name not recognised. Please enter your full name exactly as assigned, or contact the Revenue Analyst.");
+        return;
+      }
+      onLogin({ role:"am", name: match || name.trim() });
     }
   };
 
@@ -826,16 +832,28 @@ function AmView({ user, onLogout, clients, setClients, syncUpdate }) {
 
 // ── Root ─────────────────────────────────────────────────────
 function Root() {
-  const [user, setUser]         = useState(null);
-  const [clients, setClients]   = useState([]);
-  const [ams, setAms]           = useState([]);
-  const [spReady, setSpReady]   = useState(false);
+  const [user, setUser]           = useState(null);
+  const [clients, setClients]     = useState([]);
+  const [ams, setAms]             = useState([]);
+  const [spReady, setSpReady]     = useState(false);
   const [spLoading, setSpLoading] = useState(false);
-  const [spError, setSpError]   = useState("");
+  const [spError, setSpError]     = useState("");
+  const [preloading, setPreloading] = useState(true); // load AMs before login
 
   const { useEffect } = React;
 
-  // Load all data from SharePoint once user logs in
+  // Preload AMs on first open so login validation works
+  useEffect(() => {
+    spGet()
+      .then(rows => {
+        const amSet = [...new Set(rows.map(r=>r.am).filter(Boolean))];
+        setAms(amSet);
+      })
+      .catch(() => {}) // silent fail — validation skipped if offline
+      .finally(() => setPreloading(false));
+  }, []);
+
+  // Load full data once user logs in
   useEffect(() => {
     if (!user) return;
     setSpLoading(true); setSpError("");
@@ -868,7 +886,15 @@ function Root() {
     try { await spDelete(id); } catch(e) { toast("⚠ SharePoint delete failed"); }
   };
 
-  if (!user) return <Login onLogin={setUser}/>;
+  if (preloading) return (
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:14,background:"var(--bg)"}}>
+      <div style={{width:36,height:36,border:"3px solid var(--border)",borderTopColor:"var(--blue)",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>
+      <div style={{fontSize:13,color:"var(--mid)"}}>Loading…</div>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  );
+
+  if (!user) return <Login onLogin={setUser} ams={ams}/>;
 
   if (spLoading) return (
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:14,background:"var(--bg)"}}>
