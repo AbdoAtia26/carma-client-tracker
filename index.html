@@ -228,6 +228,7 @@ const spGet = async () => {
     renewal:     r.renewal     || "",
     service:     r.service     || "",
     contract:    r.contract    || "",
+    amount:      r.amount      || "",
     locked:      r.locked === true || r.locked === "TRUE" || r.locked === "true",
     submittedAt: r.submitted_at || null,
   }));
@@ -252,6 +253,7 @@ const spUpdate = async (rowIndex, fields) => {
   if (fields.renewal     !== undefined || fields.Renewal     !== undefined) mapped.renewal      = fields.renewal     ?? fields.Renewal;
   if (fields.service     !== undefined || fields.Service     !== undefined) mapped.service      = fields.service     ?? fields.Service;
   if (fields.contract    !== undefined || fields.Contract    !== undefined) mapped.contract     = fields.contract    ?? fields.Contract;
+  if (fields.amount      !== undefined) mapped.amount = fields.amount;
   if (fields.locked      !== undefined || fields.Locked      !== undefined) mapped.locked       = fields.locked      ?? fields.Locked;
   if (fields.submittedAt !== undefined || fields.SubmittedAt !== undefined) mapped.submitted_at = fields.submittedAt ?? fields.SubmittedAt;
   if (!Object.keys(mapped).length) return;
@@ -387,6 +389,7 @@ function AnalystView({ user, onLogout, clients, setClients, syncAdd, syncUpdate,
       "Renewal Confirmation": c.renewal||"—",
       "Service Confirmation": c.service||"—",
       "New Contract":         c.contract||"—",
+      "Amount":               c.amount||"—",
       "Status":               c.locked?"Submitted":"Pending",
       "Submitted At":         c.submittedAt||"—",
     }));
@@ -472,6 +475,7 @@ function AnalystView({ user, onLogout, clients, setClients, syncAdd, syncUpdate,
                     <th>Renewal</th>
                     <th>Service</th>
                     <th>Contract</th>
+                    <th>Amount</th>
                     <th>Status</th>
                     <th>Actions</th>
                   </tr></thead>
@@ -488,6 +492,9 @@ function AnalystView({ user, onLogout, clients, setClients, syncAdd, syncUpdate,
                         <td>{badgeFor(c.renewal)}</td>
                         <td>{badgeFor(c.service)}</td>
                         <td>{badgeFor(c.contract)}</td>
+                        <td style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"var(--green)",fontWeight:500}}>
+                          {c.amount || <span style={{color:"var(--mid)"}}>—</span>}
+                        </td>
                         <td>
                           {c.locked
                             ? <span className="badge badge-green">✓ Submitted</span>
@@ -668,8 +675,7 @@ function AmView({ user, onLogout, clients, setClients, syncUpdate }) {
   const update = (id, field, val) => {
     if (clients.find(c=>c.id===id)?.locked) return;
     setClients(p=>p.map(c=>c.id===id?{...c,[field]:val}:c));
-    // map local field to SharePoint field name
-    const spField = { renewal:"Renewal", service:"Service", contract:"Contract" }[field];
+    const spField = { renewal:"Renewal", service:"Service", contract:"Contract", amount:"amount" }[field];
     if (spField) syncUpdate(id, { [spField]: val }).catch(()=>{});
   };
 
@@ -740,11 +746,13 @@ function AmView({ user, onLogout, clients, setClients, syncUpdate }) {
                   <th>Renewal Confirmation</th>
                   <th>Service Confirmation</th>
                   <th>New Contract</th>
+                  <th>Amount</th>
                   <th>Status</th>
                 </tr></thead>
                 <tbody>
                   {myClients.map((c,i)=>{
                     const ongoing = isOngoing(c);
+                    const needsAmount = c.contract==="Upsold" || c.contract==="Downsold";
                     return (
                     <tr key={c.id} className="slide-in" style={{animationDelay:`${i*0.03}s`, background:c.locked?"var(--green-l)":ongoing?"#f0fdf4":""}}>
                       <td style={{fontWeight:600,fontFamily:"'JetBrains Mono',monospace",fontSize:12}}>{c.account}</td>
@@ -771,6 +779,23 @@ function AmView({ user, onLogout, clients, setClients, syncUpdate }) {
                           <select className="sel" value={c.contract||""} onChange={e=>update(c.id,"contract",e.target.value)}>
                             {CONTRACT_OPTS.map(o=><option key={o} value={o==="— Select —"?"":o}>{o}</option>)}
                           </select>
+                        )}
+                      </td>
+                      <td>
+                        {c.locked ? (
+                          c.amount ? <span style={{fontSize:12,fontWeight:500,color:"var(--green)",fontFamily:"'JetBrains Mono',monospace"}}>{c.amount}</span>
+                                   : <span className="badge badge-gray">—</span>
+                        ) : needsAmount ? (
+                          <input
+                            value={c.amount||""}
+                            onChange={e=>update(c.id,"amount",e.target.value)}
+                            placeholder="Enter amount"
+                            style={{width:"100%",padding:"6px 10px",border:"1.5px solid var(--blue)",borderRadius:7,
+                              fontSize:12,fontFamily:"'JetBrains Mono',monospace",color:"var(--ink)",background:"#fff",outline:"none"}}/>
+                        ) : (
+                          <input disabled placeholder="—"
+                            style={{width:"100%",padding:"6px 10px",border:"1.5px solid var(--border)",borderRadius:7,
+                              fontSize:12,color:"var(--mid)",background:"var(--bg)",cursor:"not-allowed"}}/>
                         )}
                       </td>
                       <td>
